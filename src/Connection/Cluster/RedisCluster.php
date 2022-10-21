@@ -17,7 +17,7 @@ use Predis\Cluster\SlotMap;
 use Predis\Cluster\StrategyInterface;
 use Predis\Command\CommandInterface;
 use Predis\Command\RawCommand;
-use Predis\Configuration\OptionInterface;
+use Predis\Configuration\Options;
 use Predis\Connection\ConnectionException;
 use Predis\Connection\FactoryInterface;
 use Predis\Connection\NodeConnectionInterface;
@@ -68,7 +68,7 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
     public function __construct(
         FactoryInterface $connections,
         StrategyInterface $strategy = null,
-        OptionInterface $options = null
+        Options $options = null
     ) {
         $this->connections = $connections;
         $this->strategy = $strategy ?: new RedisClusterStrategy();
@@ -330,9 +330,10 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
             $this->buildSlotMap();
         }
 
+
         if ($node = $this->slotmap[$slot]) {
             if (count($node) > 1) {
-                return array_rand($node);
+                return $node[array_rand($node)];
             }
             return $node[0];
         }
