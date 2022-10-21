@@ -80,7 +80,13 @@ class SlotMap implements \ArrayAccess, \IteratorAggregate, \Countable
      */
     public function getNodes()
     {
-        return array_keys(array_flip($this->slots));
+        $nodes = array();
+        foreach ($this->slots as $slot => $slotNodes) {
+            foreach ($slotNodes as $slotNode) {
+                $nodes[$slotNode] = 1;
+            }
+        }
+        return array_keys($nodes);
     }
 
     /**
@@ -88,7 +94,7 @@ class SlotMap implements \ArrayAccess, \IteratorAggregate, \Countable
      *
      * @param int                            $first      Initial slot of the range.
      * @param int                            $last       Last slot of the range.
-     * @param NodeConnectionInterface|string $connection ID or connection instance.
+     * @param NodeConnectionInterface|string|array $connection ID or connection instance.
      *
      * @throws \OutOfBoundsException
      */
@@ -98,7 +104,10 @@ class SlotMap implements \ArrayAccess, \IteratorAggregate, \Countable
             throw new \OutOfBoundsException("Invalid slot range $first-$last for `$connection`");
         }
 
-        $this->slots += array_fill($first, $last - $first + 1, (string) $connection);
+        if (!is_array($connection)) {
+            $connection = array((string) $connection);
+        }
+        $this->slots += array_fill($first, $last - $first + 1, $connection);
     }
 
     /**
@@ -161,7 +170,7 @@ class SlotMap implements \ArrayAccess, \IteratorAggregate, \Countable
             throw new \OutOfBoundsException("Invalid slot $slot for `$connection`");
         }
 
-        $this->slots[(int) $slot] = (string) $connection;
+        $this->slots[(int) $slot] = array((string) $connection);
     }
 
     /**

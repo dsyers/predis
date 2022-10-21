@@ -60,7 +60,7 @@ class Cluster extends Aggregate
             case 'redis':
             case 'redis-cluster':
                 return function ($parameters, $options, $option) {
-                    return new RedisCluster($options->connections, new RedisStrategy($options->crc16));
+                    return new RedisCluster($options->connections, new RedisStrategy($options->crc16), $options);
                 };
 
             case 'predis':

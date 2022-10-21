@@ -17,6 +17,7 @@ use Predis\Cluster\SlotMap;
 use Predis\Cluster\StrategyInterface;
 use Predis\Command\CommandInterface;
 use Predis\Command\RawCommand;
+use Predis\Configuration\OptionInterface;
 use Predis\Connection\ConnectionException;
 use Predis\Connection\FactoryInterface;
 use Predis\Connection\NodeConnectionInterface;
@@ -57,6 +58,8 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
     private $connections;
     private $retryLimit = 5;
     private $retryInterval = 10;
+    private $readOnly = false;
+    private $readOnlyIncludeMaster = false;
 
     /**
      * @param FactoryInterface  $connections Optional connection factory.
@@ -64,11 +67,16 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
      */
     public function __construct(
         FactoryInterface $connections,
-        StrategyInterface $strategy = null
+        StrategyInterface $strategy = null,
+        OptionInterface $options = null
     ) {
         $this->connections = $connections;
         $this->strategy = $strategy ?: new RedisClusterStrategy();
         $this->slotmap = new SlotMap();
+        if ($options !== null) {
+            $this->readOnly = $options->readonly ?? false;
+            $this->readOnlyIncludeMaster = $options->readonlymaster ?? false;
+        }
     }
 
     /**
@@ -87,7 +95,7 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
 
     /**
      * Sets the initial retry interval (milliseconds).
-     * 
+     *
      * @param int $retryInterval Milliseconds between retries.
      */
     public function setRetryInterval($retryInterval)
@@ -279,15 +287,27 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
         $response = $this->queryClusterNodeForSlotMap($connection);
 
         foreach ($response as $slots) {
-            // We only support master servers for now, so we ignore subsequent
-            // elements in the $slots array identifying slaves.
-            list($start, $end, $master) = $slots;
+            list($start, $end) = $slots;
 
-            if ($master[0] === '') {
-                $this->slotmap->setSlots($start, $end, (string) $connection);
-            } else {
-                $this->slotmap->setSlots($start, $end, "{$master[0]}:{$master[1]}");
+            $servers = [];
+            $serverStart = 2;
+            $serverEnd = 2;
+            if ($this->readOnly && count($slots) > 3) {
+                $serverStart = $this->readOnlyIncludeMaster ? 2 : 3;
+                $serverEnd = count($slots) - 1;
             }
+
+            for ($i = $serverStart; $i <= $serverEnd; $i++) {
+                $server = $slots[$i];
+                if ($server[0] === '') {
+                    $servers[] = (string) $connection;
+                } else {
+                    $servers[] = "{$server[0]}:{$server[1]}";
+                }
+            }
+
+            $servers = array_unique($servers);
+            $this->slotmap->setSlots($start, $end, $servers);
         }
     }
 
@@ -311,7 +331,10 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
         }
 
         if ($node = $this->slotmap[$slot]) {
-            return $node;
+            if (count($node) > 1) {
+                return array_rand($node);
+            }
+            return $node[0];
         }
 
         $count = count($this->pool);
@@ -529,7 +552,7 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
 
                 if ($exception instanceof ConnectionException) {
                     $connection = $exception->getConnection();
-                    
+
                     if ($connection) {
                         $connection->disconnect();
                         $this->remove($connection);
