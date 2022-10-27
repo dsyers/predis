@@ -538,7 +538,12 @@ class RedisCluster implements ClusterInterface, \IteratorAggregate, \Countable
 
         RETRY_COMMAND: {
             try {
-                $response = $this->getConnectionByCommand($command)->$method($command);
+                $connection = $this->getConnectionByCommand($command);
+                if ($this->readOnly) {
+                    $readOnlyCommand = RawCommand::create('READONLY');
+                    $connection->executeCommand($readOnlyCommand);
+                }
+                $response = $connection->$method($command);
 
                 if ($response instanceof ErrorResponse) {
                     $message = $response->getMessage();
